@@ -14,8 +14,8 @@ from subprocess import call
 class AbstractCallback(object):
     u"""Absctract class for line callback.
 
-    Registred callback will be invked for every new line. If your action depends on more than one line, you have to
-    maintain state yourself.
+        Registred callback will be invked for every new line. If your action depends on more than one line, you have to
+        maintain state yourself.
     """
 
     def __init__(self):
@@ -26,6 +26,46 @@ class AbstractCallback(object):
     def process_line(self, line, file_name):
         u"""Function that will be called for every line"""
 
+        raise NotImplementedError
+
+    def blink_screen(self):
+        call("open -a BlinkScreen", shell=True)
+
+    def say(self, message):
+        say = "".join(["say '", message, "'"])
+        call(say, shell=True)
+
+    def notification(self, title, info):
+        notification = "".join(["osascript -e 'display notification \"", info, "\" with title \"", title, "\"'"])
+        call(notification, shell=True)
+
+    def play_sound(self, sound):
+        play = "".join(["afplay ", sound])
+        call(play, shell=True)
+
+
+class SimpleFindLineAbstractCalback(AbstractCallback):
+
+    def __init__(self):
+        super(SimpleFindLineAbstractCalback, self).__init__()
+
+    def process_line(self, line, file_name):
+        needed_text = self.get_needed_text().lower()
+        if needed_text in line.lower():
+            print self.text_reaction()
+
+            def async_message():
+                self.async_reaction()
+
+            Thread(target = async_message).start()
+
+    def get_needed_text(self):
+        raise NotImplementedError
+
+    def text_reaction(self):
+        raise NotImplementedError
+
+    def async_reaction(self):
         raise NotImplementedError
 
 
@@ -157,7 +197,8 @@ class ServerStartUpCallback(AbstractCallback):
     u"""Inform when Tomcat server is up and running."""
 
     terminal_message = "Server started in {}"
-    command = "osascript -e 'display notification \"You can work. It started in {}\" with title \"Platform is UP\"'"
+    sound = "~/Library/Sounds/sfx_00001.aiff"
+    started_in = "You can work. It started in {}"
 
     def __init__(self):
         super(ServerStartUpCallback, self).__init__()
@@ -174,8 +215,9 @@ class ServerStartUpCallback(AbstractCallback):
             # Executing all commands grouped in this function, takes some time.
             # To omit application locking, run it in new thread.
             def async_message():
-                call(ServerStartUpCallback.command.format(formated_time), shell=True)
-                call("open -a BlinkScreen", shell=True)
+                self.notification("Platform is UP", ServerStartUpCallback.started_in.format(formated_time))
+                self.blink_screen()
+                self.play_sound(ServerStartUpCallback.sound)
 
             Thread(target = async_message).start()
 
@@ -222,11 +264,46 @@ class ServerStartUpCallback(AbstractCallback):
         return result
 
 
+class ShutDownCallback(SimpleFindLineAbstractCalback):
+
+    def __init__(self):
+        super(ShutDownCallback, self).__init__()
+
+    def get_needed_text(self):
+        return "<-- Wrapper Stopped"
+
+    def text_reaction(self):
+        return "Server is DONW!"
+
+    def async_reaction(self):
+        self.notification("Platform is DOWN!", "Platform is DOWN!")
+        self.blink_screen()
+        self.say("Server is down!")
+
+
+class RestartingCallback(SimpleFindLineAbstractCalback):
+
+    def __init__(self):
+        super(RestartingCallback, self).__init__()
+
+    def get_needed_text(self):
+        return "JVM requested a restart."
+
+    def text_reaction(self):
+        return "Restarting Requested"
+
+    def async_reaction(self):
+        self.notification("Restarting Requested!", "Restarting Requested!")
+        self.say("Restarting requested!")
+
+
 if __name__ == '__main__':
 
     callback_list = [
         PrintLineCallback(),
         ServerStartUpCallback(),
+        ShutDownCallback(),
+        RestartingCallback(),
     ]
 
     try :
