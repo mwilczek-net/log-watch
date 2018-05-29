@@ -87,6 +87,8 @@ class LogWatch(object):
 
         self.watched_files = dict()
 
+        self.last_file_name = ''
+
         while True: # main loop
             self.update_watched_files()
             self.tail_for_files()
@@ -149,10 +151,6 @@ class LogWatch(object):
         u"""Method iterate over files, checking if there is something new."""
 
         for file in self.watched_files.values(): # For every file
-            print '-----------------------------'
-            print file['name']
-            print
-            print
 
             with open(file['name'], 'r') as f:
                 # Set possition, from which to start.
@@ -171,6 +169,16 @@ class LogWatch(object):
                     line = f.readline()
                     if line == '':
                         break
+
+                    # File header only if previous content was form different file
+                    if self.last_file_name != file['name']:
+                        self.last_file_name=file['name']
+                        print
+                        print '-----------------------------'
+                        print file['name']
+                        print
+                        print
+
                     self.process_line(line, file)
 
                 # Update state
@@ -217,7 +225,8 @@ class ServerStartUpCallback(AbstractCallback):
             def async_message():
                 self.notification("Platform is UP", ServerStartUpCallback.started_in.format(formated_time))
                 self.blink_screen()
-                self.play_sound(ServerStartUpCallback.sound)
+                # self.play_sound(ServerStartUpCallback.sound)
+                self.say("Server is UP! You can work!")
 
             Thread(target = async_message).start()
 
